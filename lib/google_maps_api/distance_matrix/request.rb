@@ -3,13 +3,14 @@ require "net/http"
 class GoogleMapsAPI::DistanceMatrix::Request
   BASE_PATH = "/maps/api/distancematrix/json"
 
-  attr_accessor :origins, :destinations, :options, :http_adapter
+  attr_accessor :origins, :destinations, :options, :http_adapter, :response
 
   def initialize(origins, destinations, options = {})
     @origins = arrays_to_coordinate_string(origins)
     @destinations = arrays_to_coordinate_string(destinations)
     @options = options
     @http_adapter = nil
+    @response = nil
   end
 
   def self.build(origin, destination, options = {})
@@ -17,13 +18,16 @@ class GoogleMapsAPI::DistanceMatrix::Request
   end
 
   def perform
-    response = http_adapter.get_response(uri)
-    if response.is_a?(Net::HTTPSuccess)
-      return GoogleMapsAPI::DistanceMatrix::Response.from_json(response.body)
+    parsed_url = URI.parse(uri.to_s)
+    http = http_adapter.new(parsed_url.host, parsed_url.port)
+    http.use_ssl = (scheme == "https")
+    @response = http.request_get(parsed_url.request_uri)
+    if @response.is_a?(Net::HTTPSuccess)
+      return GoogleMapsAPI::DistanceMatrix::Response.from_json(@response.body)
     else
       msg = "The response was not successful (200). Call #response for datails."
       exception = GoogleMapsAPI::DistanceMatrix::ResponseError.new(msg)
-      exception.response = response
+      exception.response = @response
       raise exception
     end
   end
